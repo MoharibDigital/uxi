@@ -1,385 +1,459 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
-
-"""
-Safer IPTV / Xtream UI installer (Python 3)
-- Adds explicit user confirmation, backups, download retries, MySQL auth checks,
-  safe extraction into tempdir, and non-invasive systemd creation only if start script exists.
-- Designed for company use / testing. Run as root.
-
-Usage:
-  sudo python3 iptv_installer_safe.py
-"""
-
-import os
-import sys
-import subprocess
-import shutil
-import socket
-import random
-import string
-import zipfile
-import tarfile
-import tempfile
-import time
+import subprocess, os, random, string, sys, shutil, socket, zipfile, urllib.request
+from itertools import cycle
+from zipfile import ZipFile
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
-from pathlib import Path
-from getpass import getpass
-from datetime import datetime
+import base64
 
-# -------------------- CONFIG --------------------
-BASE_DIR = Path("/srv/iptv")
-INSTALL_DIR = BASE_DIR / "iptv_xtream_codes"
-USER = "iptv"
-LOG_FILE = Path("/var/log/iptv_install_safe.log")
-PACKAGES = [
-    "wget", "unzip", "zip", "htop", "mc",
-    "libxslt1-dev", "libgeoip-dev", "e2fsprogs",
-    "libjemalloc1", "mysql-server", "nginx", "python3-paramiko"
-]
-DOWNLOAD_RETRIES = 3
-MAX_DOWNLOAD_BYTES = 500 * 1024 * 1024  # 500 MB default limit (adjust if needed)
-# ------------------------------------------------
+rDownloadURL = {"main": "https://bitbucket.org/emre1393/xtreamui_mirror/downloads/main_xtreamcodes_reborn.tar.gz", "sub": "https://bitbucket.org/emre1393/xtreamui_mirror/downloads/sub_xtreamcodes_reborn.tar.gz"}
+rPackages = ["libcurl3", "libxslt1-dev", "libgeoip-dev", "e2fsprogs", "wget", "mcrypt", "nscd", "htop", "zip", "unzip", "mc", "libjemalloc1", "python-paramiko", "mysql-server"]
+rInstall = {"MAIN": "main", "LB": "sub"}
+rUpdate = {"UPDATE": "update"}
+rMySQLCnf = base64.b64decode("IyBYdHJlYW0gQ29kZXMKCltjbGllbnRdCnBvcnQgICAgICAgICAgICA9IDMzMDYKCltteXNxbGRfc2FmZV0KbmljZSAgICAgICAgICAgID0gMAoKW215c3FsZF0KdXNlciAgICAgICAgICAgID0gbXlzcWwKcG9ydCAgICAgICAgICAgID0gNzk5OQpiYXNlZGlyICAgICAgICAgPSAvdXNyCmRhdGFkaXIgICAgICAgICA9IC92YXIvbGliL215c3FsCnRtcGRpciAgICAgICAgICA9IC90bXAKbGMtbWVzc2FnZXMtZGlyID0gL3Vzci9zaGFyZS9teXNxbApza2lwLWV4dGVybmFsLWxvY2tpbmcKc2tpcC1uYW1lLXJlc29sdmU9MQoKYmluZC1hZGRyZXNzICAgICAgICAgICAgPSAqCmtleV9idWZmZXJfc2l6ZSA9IDEyOE0KCm15aXNhbV9zb3J0X2J1ZmZlcl9zaXplID0gNE0KbWF4X2FsbG93ZWRfcGFja2V0ICAgICAgPSA2NE0KbXlpc2FtLXJlY292ZXItb3B0aW9ucyA9IEJBQ0tVUAptYXhfbGVuZ3RoX2Zvcl9zb3J0X2RhdGEgPSA4MTkyCnF1ZXJ5X2NhY2hlX2xpbWl0ICAgICAgID0gNE0KcXVlcnlfY2FjaGVfc2l6ZSAgICAgICAgPSAyNTZNCgoKZXhwaXJlX2xvZ3NfZGF5cyAgICAgICAgPSAxMAptYXhfYmlubG9nX3NpemUgICAgICAgICA9IDEwME0KCm1heF9leGVjdXRpb25fdGltZSA9IDAKdHJhbnNhY3Rpb25faXNvbGF0aW9uID0gUkVBRC1DT01NSVRURUQKCm1heF9jb25uZWN0aW9ucyAgPSAyMDAwMApiYWNrX2xvZyA9IDQwOTYKb3Blbl9maWxlc19saW1pdCA9IDIwMjQwCmlubm9kYl9vcGVuX2ZpbGVzID0gMjAyNDAKbWF4X2Nvbm5lY3RfZXJyb3JzID0gMzA3Mgp0YWJsZV9vcGVuX2NhY2hlID0gNDA5Ngp0YWJsZV9kZWZpbml0aW9uX2NhY2hlID0gNDA5NgoKCnRtcF90YWJsZV9zaXplID0gMUcKbWF4X2hlYXBfdGFibGVfc2l6ZSA9IDFHCgppbm5vZGJfYnVmZmVyX3Bvb2xfc2l6ZSA9IDEwRwppbm5vZGJfYnVmZmVyX3Bvb2xfaW5zdGFuY2VzID0gMTAKaW5ub2RiX3JlYWRfaW9fdGhyZWFkcyA9IDY0Cmlubm9kYl93cml0ZV9pb190aHJlYWRzID0gNjQKaW5ub2RiX3RocmVhZF9jb25jdXJyZW5jeSA9IDAKaW5ub2RiX2ZsdXNoX2xvZ19hdF90cnhfY29tbWl0ID0gMAppbm5vZGJfZmx1c2hfbWV0aG9kID0gT19ESVJFQ1QKcGVyZm9ybWFuY2Vfc2NoZW1hID0gMAppbm5vZGItZmlsZS1wZXItdGFibGUgPSAxCmlubm9kYl9pb19jYXBhY2l0eT0yMDAwMAppbm5vZGJfdGFibGVfbG9ja3MgPSAwCmlubm9kYl9sb2NrX3dhaXRfdGltZW91dCA9IDEwMAppbm5vZGJfZGVhZGxvY2tfZGV0ZWN0ID0gMAoKCnNxbC1tb2RlPSJOT19FTkdJTkVfU1VCU1RJVFVUSU9OIgoKW215c3FsZHVtcF0KcXVpY2sKcXVvdGUtbmFtZXMKbWF4X2FsbG93ZWRfcGFja2V0ICAgICAgPSAyNE0KY29tcGxldGUtaW5zZXJ0CgpbbXlzcWxdCgpbaXNhbWNoa10Ka2V5X2J1ZmZlcl9zaXplICAgICAgICAgICAgICA9IDE2TQ==").decode('utf-8')
+rMySQLServiceFile = base64.b64decode("IyBNeVNRTCBzeXN0ZW1kIHNlcnZpY2UgZmlsZQoKW1VuaXRdCkRlc2NyaXB0aW9uPU15U1FMIENvbW11bml0eSBTZXJ2ZXIKQWZ0ZXI9bmV0d29yay50YXJnZXQKCltJbnN0YWxsXQpXYW50ZWRCeT1tdWx0aS11c2VyLnRhcmdldAoKW1NlcnZpY2VdClR5cGU9Zm9ya2luZwpVc2VyPW15c3FsCkdyb3VwPW15c3FsClBJREZpbGU9L3J1bi9teXNxbGQvbXlzcWxkLnBpZApQZXJtaXNzaW9uc1N0YXJ0T25seT10cnVlCkV4ZWNTdGFydFByZT0vdXNyL3NoYXJlL215c3FsL215c3FsLXN5c3RlbWQtc3RhcnQgcHJlCkV4ZWNTdGFydD0vdXNyL3NiaW4vbXlzcWxkIC0tZGFlbW9uaXplIC0tcGlkLWZpbGU9L3J1bi9teXNxbGQvbXlzcWxkLnBpZCAtLW1heC1leGVjdXRpb24tdGltZT0wCkVudmlyb25tZW50RmlsZT0tL2V0Yy9teXNxbC9teXNxbGQKVGltZW91dFNlYz02MDAKUmVzdGFydD1vbi1mYWlsdXJlClJ1bnRpbWVEaXJlY3Rvcnk9bXlzcWxkClJ1bnRpbWVEaXJlY3RvcnlNb2RlPTc1NQpMaW1pdE5PRklMRT01MDAw").decode('utf-8')
 
-def log(msg):
-    ts = datetime.utcnow().isoformat() + "Z"
-    line = f"[{ts}] {msg}"
-    print(line)
+class col:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    YELLOW = '\033[33m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+def generate(length=19): 
+    return ''.join(random.choice(string.ascii_letters + string.digits) for i in range(length))
+
+def getIP():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with LOG_FILE.open("a") as f:
-            f.write(line + "\n")
-    except Exception:
-        pass
-
-def run(cmd, check=True, capture_output=False):
-    log(f"RUN: {cmd}")
-    if capture_output:
-        res = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        log(f"OUT: {res.stdout.strip()}")
-        if res.returncode != 0 and res.stderr:
-            log(f"ERR: {res.stderr.strip()}")
-        if check and res.returncode != 0:
-            raise subprocess.CalledProcessError(res.returncode, cmd)
-        return res
-    else:
-        res = subprocess.run(cmd, shell=True)
-        if check and res.returncode != 0:
-            raise subprocess.CalledProcessError(res.returncode, cmd)
-        return res
-
-def ensure_root():
-    if os.geteuid() != 0:
-        print("This script must be run as root. Use: sudo python3 %s" % sys.argv[0])
-        sys.exit(1)
-
-def confirm_user_intent():
-    print("\nIMPORTANT: You must have the legal right to install and run the target software.")
-    print("This installer will make system changes (packages, users, MySQL, services).")
-    ans = input("Do you confirm you have permission and want to proceed? (type 'YES' to continue): ").strip()
-    if ans != "YES":
-        log("User did not confirm consent. Aborting.")
-        sys.exit(1)
-
-def check_disk(min_gb=2):
-    try:
-        stat = shutil.disk_usage(str(BASE_DIR.parent))
-        free_gb = stat.free / (1024 ** 3)
-        log(f"Disk free: {free_gb:.2f} GB")
-        if free_gb < min_gb:
-            raise SystemExit(f"Not enough disk space under {BASE_DIR.parent} (need >= {min_gb} GB).")
-    except Exception as e:
-        log(f"Disk check failed: {e}")
-
-def apt_update_and_install(pkgs):
-    log("Updating apt and installing packages (non-interactive). This may take a while.")
-    run("export DEBIAN_FRONTEND=noninteractive && apt-get update -y >> %s 2>&1" % LOG_FILE)
-    install_cmd = "apt-get install -y " + " ".join(pkgs) + f" >> {LOG_FILE} 2>&1"
-    run(install_cmd)
-
-def create_system_user(user):
-    try:
-        subprocess.run(["id", user], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        log(f"User {user} already exists")
-    except subprocess.CalledProcessError:
-        log(f"Creating system user {user}")
-        run(f"adduser --system --shell /bin/false --group --disabled-login {user} >> {LOG_FILE} 2>&1")
-
-def secure_directory(path: Path, user: str, mode=0o750):
-    path.mkdir(parents=True, exist_ok=True)
-    run(f"chown -R {user}:{user} {str(path)}")
-    try:
-        path.chmod(mode)
-    except Exception as e:
-        log(f"chmod failed for {path}: {e}")
-
-def url_head_ok(url, timeout=10):
-    try:
-        req = Request(url, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
-        with urlopen(req, timeout=timeout) as resp:
-            return resp.status in (200, 302, 301)
-    except Exception:
-        return False
-
-def download_file_with_retries(url, dest: Path, max_bytes=MAX_DOWNLOAD_BYTES, retries=DOWNLOAD_RETRIES):
-    log(f"Downloading {url} -> {dest} (max {max_bytes} bytes)")
-    last_err = None
-    for attempt in range(1, retries+1):
-        try:
-            req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urlopen(req, timeout=30) as resp:
-                # basic size check if content-length provided
-                cl = resp.getheader("Content-Length")
-                if cl and int(cl) > max_bytes:
-                    raise ValueError(f"Content-Length {cl} exceeds limit {max_bytes}")
-                with open(dest, "wb") as out:
-                    total = 0
-                    while True:
-                        chunk = resp.read(65536)
-                        if not chunk:
-                            break
-                        total += len(chunk)
-                        if total > max_bytes:
-                            raise ValueError("Download exceeded maximum allowed size")
-                        out.write(chunk)
-            log(f"Downloaded ok ({total} bytes)")
-            return
-        except Exception as e:
-            last_err = e
-            log(f"Download attempt {attempt} failed: {e}")
-            time.sleep(2 * attempt)
-    raise last_err
-
-def extract_archive_safe(archive: Path, dest: Path):
-    log(f"Extracting archive {archive} into temp dir and moving content to {dest}")
-    if not archive.exists():
-        raise FileNotFoundError("Archive not found: %s" % archive)
-    with tempfile.TemporaryDirectory() as td:
-        tmpd = Path(td)
-        if str(archive).endswith((".tar.gz", ".tgz", ".tar")):
-            with tarfile.open(archive, "r:*") as tf:
-                tf.extractall(path=tmpd)
-        elif str(archive).endswith(".zip"):
-            with zipfile.ZipFile(archive, "r") as zf:
-                zf.extractall(path=tmpd)
-        else:
-            raise ValueError("Unsupported archive format")
-        # identify top-level extracted folder(s)
-        entries = list(tmpd.iterdir())
-        if not entries:
-            raise ValueError("Archive empty or extraction failed")
-        # if single top-level directory, move its contents; otherwise move all
-        if len(entries) == 1 and entries[0].is_dir():
-            src = entries[0]
-        else:
-            src = tmpd
-        # create dest parent and backup existing install dir
-        if dest.exists():
-            backup = dest.with_name(dest.name + ".backup." + datetime.utcnow().strftime("%Y%m%d%H%M%S"))
-            log(f"Backing up existing install at {dest} -> {backup}")
-            shutil.move(str(dest), str(backup))
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        log(f"Moving files from {src} -> {dest}")
-        shutil.move(str(src), str(dest))
-
-def try_mysql_command(cmd, root_password=None):
-    # cmd: SQL string
-    base = "mysql -e \"{}\"".format(cmd.replace('"','\\"'))
-    if root_password:
-        base = f"mysql -uroot -p'{root_password}' -e \"{cmd.replace('\"','\\\"')}\""
-    try:
-        run(base, check=True, capture_output=True)
-        return True
-    except subprocess.CalledProcessError:
-        return False
-
-def configure_mysql_safe(db_name, db_user, db_password):
-    log("Configuring MySQL database and user (safe mode)")
-    sql = (
-        f"CREATE DATABASE IF NOT EXISTS `{db_name}` DEFAULT CHARACTER SET utf8mb4;"
-        f"CREATE USER IF NOT EXISTS '{db_user}'@'%' IDENTIFIED BY '{db_password}';"
-        f"GRANT ALL PRIVILEGES ON `{db_name}`.* TO '{db_user}'@'%';FLUSH PRIVILEGES;"
-    )
-    # Try without password (socket auth)
-    if try_mysql_command("SELECT 1;"):
-        run(f"mysql -e \"{sql}\"")
-        return True
-    # Ask for root password as fallback
-    log("Root MySQL socket auth failed. If MySQL uses password auth, provide root password.")
-    root_pw = getpass("MySQL root password (leave blank to abort): ")
-    if not root_pw:
-        raise SystemExit("MySQL configuration aborted by user.")
-    if try_mysql_command("SELECT 1;", root_password=root_pw):
-        run(f"mysql -uroot -p'{root_pw}' -e \"{sql}\"")
-        return True
-    raise RuntimeError("MySQL commands failed even after providing root password.")
-
-def generate_password(length=24):
-    chars = string.ascii_letters + string.digits
-    return ''.join(random.choice(chars) for _ in range(length))
-
-def create_systemd_service_if_needed(user, install_dir):
-    start_sh = install_dir / "start_services.sh"
-    svc_file = Path("/etc/systemd/system/iptv-services.service")
-    if start_sh.exists():
-        log("Found start_services.sh, creating systemd service wrapper.")
-        svc_text = f"""[Unit]
-Description=IPTV services wrapper
-After=network.target mysql.service
-
-[Service]
-Type=simple
-User={user}
-Group={user}
-WorkingDirectory={install_dir}
-ExecStart=/bin/bash -lc 'exec {install_dir}/start_services.sh'
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-"""
-        svc_file.write_text(svc_text)
-        run("systemctl daemon-reload && systemctl enable iptv-services.service")
-        try:
-            run("systemctl start iptv-services.service")
-        except Exception as e:
-            log(f"Starting iptv-services.service failed: {e}")
-    else:
-        log("No start_services.sh found — skipping systemd service creation (non-invasive).")
-
-def write_config_file_safe(install_dir, user, db_name, db_user, db_password):
-    cfg_dir = install_dir
-    cfg_path = cfg_dir / "config"
-    cfg_dir.mkdir(parents=True, exist_ok=True)
-    cfg_content = f'{{"host":"127.0.0.1","db_user":"{db_user}","db_pass":"{db_password}","db_name":"{db_name}","server_id":"1","db_port":"3306"}}'
-    try:
-        tmp = cfg_path.with_suffix(".tmp")
-        tmp.write_text(cfg_content)
-        run(f"chown {user}:{user} {str(tmp)}")
-        tmp.chmod(0o600)
-        tmp.replace(cfg_path)
-        log(f"Wrote config to {cfg_path} (mode 600)")
-    except Exception as e:
-        log(f"Failed to write config file: {e}")
-
-def get_ip():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
         s.close()
         return ip
     except Exception:
+        s.close()
         return "127.0.0.1"
 
-def main():
-    ensure_root()
-    confirm_user_intent()
-    log("Starting safer IPTV installer")
+def getVersion():
+    try: 
+        result = subprocess.check_output("lsb_release -d".split(), stderr=subprocess.DEVNULL)
+        return result.decode('utf-8').split(":")[-1].strip()
+    except Exception: 
+        return ""
 
-    # ask for tarball url (company mirror recommended)
-    tarball_url = input("Enter full URL to application tar.gz or zip (company mirror recommended):\n> ").strip()
-    if not tarball_url:
-        log("No URL provided - aborting.")
-        sys.exit(1)
-    if not url_head_ok(tarball_url):
-        log("Warning: HEAD check failed for URL. Continue only if you trust the source.")
-        if input("Continue despite failed HEAD? (yes/no): ").strip().lower() != "yes":
-            sys.exit(1)
+def printc(rText, rColour=col.OKBLUE, rPadding=0):
+    print("%s ┌──────────────────────────────────────── %s" % (rColour, col.ENDC))
+    for i in range(rPadding): 
+        print("%s │                                          │ %s" % (rColour, col.ENDC))
+    print("%s │ %s%s%s │ %s" % (rColour, " "*(20-(len(rText)//2)), rText, " "*(40-(20-(len(rText)//2))-len(rText)), col.ENDC))
+    for i in range(rPadding): 
+        print("%s │                                          │ %s" % (rColour, col.ENDC))
+    print("%s └──────────────────────────────────────── %s" % (rColour, col.ENDC))
+    print(" ")
 
-    # basic system checks
-    check_disk(min_gb=2)
+def prepare(rType="MAIN"):
+    global rPackages
+    if rType != "MAIN": 
+        rPackages = rPackages[:-3]
+    printc("Preparing Installation")
+    for rFile in ["/var/lib/dpkg/lock-frontend", "/var/cache/apt/archives/lock", "/var/lib/dpkg/lock"]:
+        try: 
+            os.remove(rFile)
+        except: 
+            pass
+    os.system("apt-get update > /dev/null")
+    printc("Removing libcurl4 if installed")
+    os.system("apt-get remove --auto-remove libcurl4 -y > /dev/null")
+    for rPackage in rPackages:
+        printc("Installing %s" % rPackage)
+        os.system("apt-get install %s -y > /dev/null" % rPackage)
+    printc("Installing libpng")
+    os.system("wget -q -O /tmp/libpng12.deb http://mirrors.kernel.org/ubuntu/pool/main/libp/libpng/libpng12-0_1.2.54-1ubuntu1_amd64.deb")
+    os.system("dpkg -i /tmp/libpng12.deb > /dev/null")
+    os.system("apt-get install -y > /dev/null") # Clean up above
+    try: 
+        os.remove("/tmp/libpng12.deb")
+    except: 
+        pass
+    try:
+        subprocess.check_output("getent passwd xtreamcodes > /dev/null", shell=True)
+    except:
+        # Create User
+        printc("Creating user xtreamcodes")
+        os.system("adduser --system --shell /bin/false --group --disabled-login xtreamcodes > /dev/null")
+    if not os.path.exists("/home/xtreamcodes"): 
+        os.mkdir("/home/xtreamcodes")
+    return True
 
-    # optionally install packages (ask user)
-    if input("Install required packages via apt? (recommended) [yes/no]: ").strip().lower() == "yes":
-        apt_update_and_install(PACKAGES)
+def install(rType="MAIN"):
+    global rInstall, rDownloadURL
+    printc("Downloading Software")
+    try: 
+        rURL = rDownloadURL[rInstall[rType]]
+    except:
+        printc("Invalid download URL!", col.FAIL)
+        return False
+    os.system('wget -q -O "/tmp/xtreamcodes.tar.gz" "%s"' % rURL)
+    if os.path.exists("/tmp/xtreamcodes.tar.gz"):
+        printc("Installing Software")
+        os.system('tar -zxvf "/tmp/xtreamcodes.tar.gz" -C "/home/xtreamcodes/" > /dev/null')
+        try: 
+            os.remove("/tmp/xtreamcodes.tar.gz")
+        except: 
+            pass
+        return True
+    printc("Failed to download installation file!", col.FAIL)
+    return False
+
+def update(rType="MAIN"):
+    if rType == "UPDATE":
+        printc("Enter the link of release_xyz.zip file:", col.WARNING)
+        rlink = input('Example: https://lofertech.com/xui/release_22f.zip\n\nNow enter the link:\n\n')
     else:
-        log("Skipping package installation (user chose no).")
+        rlink = "https://lofertech.com/xui/release_22f.zip"
+        printc("Installing Admin Panel")
+    hdr = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.125 Safari/537.36',
+       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+       'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3',
+       'Accept-Encoding': 'none',
+       'Accept-Language': 'en-US,en;q=0.8',
+       'Connection': 'keep-alive'}
+    req = urllib.request.Request(rlink, headers=hdr)
+    try:
+        urllib.request.urlopen(req)
+    except:
+        printc("Invalid download URL!", col.FAIL)
+        return False
+    rURL = rlink
+    printc("Downloading Software Update")  
+    os.system('wget -q -O "/tmp/update.zip" "%s"' % rURL)
+    if os.path.exists("/tmp/update.zip"):
+        try: 
+            is_ok = zipfile.ZipFile("/tmp/update.zip")
+            is_ok.close()
+        except:
+            printc("Invalid link or zip file is corrupted!", col.FAIL)
+            try:
+                os.remove("/tmp/update.zip")
+            except:
+                pass
+            return False
+        printc("Updating Software")
+        os.system('chattr -i /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb > /dev/null && rm -rf /home/xtreamcodes/iptv_xtream_codes/admin > /dev/null && rm -rf /home/xtreamcodes/iptv_xtream_codes/pytools > /dev/null && unzip /tmp/update.zip -d /tmp/update/ > /dev/null && cp -rf /tmp/update/XtreamUI-master/* /home/xtreamcodes/iptv_xtream_codes/ > /dev/null && rm -rf /tmp/update/XtreamUI-master > /dev/null && rm -rf /tmp/update > /dev/null && wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/GeoLite2.mmdb -O /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb > /dev/null && chown -R xtreamcodes:xtreamcodes /home/xtreamcodes/ > /dev/null && chmod +x /home/xtreamcodes/iptv_xtream_codes/permissions.sh > /dev/null && chattr +i /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb > /dev/null')
+        
+        # Check if permissions.sh exists before reading
+        permissions_file = "/home/xtreamcodes/iptv_xtream_codes/permissions.sh"
+        try:
+            with open(permissions_file, 'r') as f:
+                content = f.read()
+            if "sudo chmod 400 /home/xtreamcodes/iptv_xtream_codes/config" not in content:
+                raise FileNotFoundError
+        except (FileNotFoundError, IOError):
+            os.system('echo "#!/bin/bash\nsudo chmod -R 777 /home/xtreamcodes 2>/dev/null\nsudo find /home/xtreamcodes/iptv_xtream_codes/admin/ -type f -exec chmod 644 {} \\; 2>/dev/null\nsudo find /home/xtreamcodes/iptv_xtream_codes/admin/ -type d -exec chmod 755 {} \\; 2>/dev/null\nsudo find /home/xtreamcodes/iptv_xtream_codes/wwwdir/ -type f -exec chmod 644 {} \\; 2>/dev/null\nsudo find /home/xtreamcodes/iptv_xtream_codes/wwwdir/ -type d -exec chmod 755 {} \\; 2>/dev/null\nsudo chmod +x /home/xtreamcodes/iptv_xtream_codes/nginx/sbin/nginx 2>/dev/null\nsudo chmod +x /home/xtreamcodes/iptv_xtream_codes/nginx_rtmp/sbin/nginx_rtmp 2>/dev/null\nsudo chmod 400 /home/xtreamcodes/iptv_xtream_codes/config 2>/dev/null" > /home/xtreamcodes/iptv_xtream_codes/permissions.sh')
+        
+        os.system("sed -i 's|xtream-ui.com/install/balancer.py|github.com/emre1393/xtreamui_mirror/raw/master/balancer.py|g' /home/xtreamcodes/iptv_xtream_codes/pytools/balancer.py")
+        os.system("/home/xtreamcodes/iptv_xtream_codes/permissions.sh > /dev/null")
+        try: 
+            os.remove("/tmp/update.zip")
+        except: 
+            pass
+        return True
+    printc("Failed to download installation file!", col.FAIL)
+    return False
 
-    # create service user and directories
-    create_system_user(USER)
-    secure_directory(BASE_DIR, USER)
+
+def mysql(rUsername, rPassword):
+    global rMySQLCnf
+    printc("Configuring MySQL")
+    rCreate = True
+    if os.path.exists("/etc/mysql/my.cnf"):
+        try:
+            with open("/etc/mysql/my.cnf", "r") as f:
+                content = f.read(14)
+            if content == "# Xtream Codes": 
+                rCreate = False
+        except Exception:
+            pass
+    if rCreate:
+        try:
+            shutil.copy("/etc/mysql/my.cnf", "/etc/mysql/my.cnf.xc")
+        except Exception:
+            pass
+        with open("/etc/mysql/my.cnf", "w") as rFile:
+            rFile.write(rMySQLCnf)
+        os.system("service mysql restart > /dev/null")
     
-    # Download to a temporary file
-    tmp_archive = Path(tempfile.gettempdir()) / f"iptv_pkg_{int(time.time())}"
+    printc("Enter MySQL Root Password:", col.WARNING)
+    for i in range(5):
+        rMySQLRoot = input("  ")
+        print(" ")
+        if len(rMySQLRoot) > 0: 
+            rExtra = " -p%s" % rMySQLRoot
+        else: 
+            rExtra = ""
+        printc("Drop existing & create database? Y/N", col.WARNING)
+        if input("  ").upper() == "Y": 
+            rDrop = True
+        else: 
+            rDrop = False
+        try:
+            if rDrop:
+                os.system('mysql -u root%s -e "DROP DATABASE IF EXISTS xtream_iptvpro; CREATE DATABASE IF NOT EXISTS xtream_iptvpro;" > /dev/null' % rExtra)
+                os.system("mysql -u root%s xtream_iptvpro < /home/xtreamcodes/iptv_xtream_codes/database.sql > /dev/null" % rExtra)
+                os.system('mysql -u root%s -e "USE xtream_iptvpro; UPDATE settings SET live_streaming_pass = \'%s\', unique_id = \'%s\', crypt_load_balancing = \'%s\', get_real_ip_client=\'\';" > /dev/null' % (rExtra, generate(20), generate(10), generate(20)))
+                os.system('mysql -u root%s -e "USE xtream_iptvpro; REPLACE INTO streaming_servers (id, server_name, domain_name, server_ip, vpn_ip, ssh_password, ssh_port, diff_time_main, http_broadcast_port, total_clients, system_os, network_interface, latency, status, enable_geoip, geoip_countries, last_check_ago, can_delete, server_hardware, total_services, persistent_connections, rtmp_port, geoip_type, isp_names, isp_type, enable_isp, boost_fpm, http_ports_add, network_guaranteed_speed, https_broadcast_port, https_ports_add, whitelist_ips, watchdog_data, timeshift_only) VALUES (1, \'Main Server\', \'\', \'%s\', \'\', NULL, NULL, 0, 25461, 1000, \'%s\', \'eth0\', 0, 1, 0, \'\', 0, 0, \'{}\', 3, 0, 25462, \'low_priority\', \'\', \'low_priority\', 0, 1, \'\', 1000, 25463, \'\', \'[\"127.0.0.1\",\"\"]\', \'{}\', 0);" > /dev/null' % (rExtra, getIP(), getVersion()))
+                os.system('mysql -u root%s -e "USE xtream_iptvpro; REPLACE INTO reg_users (id, username, password, email, member_group_id, verified, status) VALUES (1, \'admin\', \'\$6\$rounds=20000\$xtreamcodes\$XThC5OwfuS0YwS4ahiifzF14vkGbGsFF1w7ETL4sRRC5sOrAWCjWvQJDromZUQoQuwbAXAFdX3h3Cp3vqulpS0\', \'admin@website.com\', 1, 1, 1);" > /dev/null'  % rExtra)
+                os.system('mysql -u root%s -e "CREATE USER \'%s\'@\'%%\' IDENTIFIED BY \'%s\'; GRANT ALL PRIVILEGES ON xtream_iptvpro.* TO \'%s\'@\'%%\' WITH GRANT OPTION; GRANT SELECT, LOCK TABLES ON *.* TO \'%s\'@\'%%\';FLUSH PRIVILEGES;" > /dev/null' % (rExtra, rUsername, rPassword, rUsername, rUsername))
+                os.system('mysql -u root%s -e "USE xtream_iptvpro; CREATE TABLE IF NOT EXISTS dashboard_statistics (id int(11) NOT NULL AUTO_INCREMENT, type varchar(16) NOT NULL DEFAULT \'\', time int(16) NOT NULL DEFAULT \'0\', count int(16) NOT NULL DEFAULT \'0\', PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=latin1; INSERT INTO dashboard_statistics (type, time, count) VALUES(\'conns\', UNIX_TIMESTAMP(), 0),(\'users\', UNIX_TIMESTAMP(), 0);" > /dev/null' % rExtra)
+                
+                if not os.path.exists("/etc/mysql/mysqld"):
+                    try:
+                        with open("/lib/systemd/system/mysql.service", "r") as f:
+                            service_content = f.read()
+                        if "EnvironmentFile=-/etc/mysql/mysqld" not in service_content:
+                            os.system('echo "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.1" > /etc/mysql/mysqld')
+                            with open("/lib/systemd/system/mysql.service", "w") as f:
+                                f.write(rMySQLServiceFile)
+                            os.system('systemctl daemon-reload; systemctl restart mysql.service;')
+                    except Exception:
+                        pass
+            try: 
+                os.remove("/home/xtreamcodes/iptv_xtream_codes/database.sql")
+            except: 
+                pass
+            return True
+        except Exception: 
+            printc("Invalid password! Try again", col.FAIL)
+    return False
+
+def encrypt(rHost="127.0.0.1", rUsername="user_iptvpro", rPassword="", rDatabase="xtream_iptvpro", rServerID=1, rPort=7999):
+    printc("Encrypting...")
+    try: 
+        os.remove("/home/xtreamcodes/iptv_xtream_codes/config")
+    except: 
+        pass
+    
+    config_data = '{\"host\":\"%s\",\"db_user\":\"%s\",\"db_pass\":\"%s\",\"db_name\":\"%s\",\"server_id\":\"%d\", \"db_port\":\"%d\"}' % (rHost, rUsername, rPassword, rDatabase, rServerID, rPort)
+    key = '5709650b0d7806074842c6de575025b1'
+    
+    # Ensure both strings are the same length by cycling the key
+    key_cycled = ''.join(key[i % len(key)] for i in range(len(config_data)))
+    
+    # XOR encryption
+    encrypted = ''.join(chr(ord(c) ^ ord(k)) for c, k in zip(config_data, key_cycled))
+    
+    # Encode to base64
+    encrypted_b64 = base64.b64encode(encrypted.encode('latin-1')).decode('ascii')
+    
+    with open('/home/xtreamcodes/iptv_xtream_codes/config', 'w') as rf:
+        rf.write(encrypted_b64)
+
+def configure(rType):
+    printc("Configuring System")
+    
+    # Check and update /etc/fstab
     try:
-        download_file_with_retries(tarball_url, tmp_archive)
-    except Exception as e:
-        log(f"Download failed: {e}")
-        sys.exit(1)
-
-    # Extract safely and move into place (backup existing)
+        with open("/etc/fstab", "r") as f:
+            fstab_content = f.read()
+        if "/home/xtreamcodes/iptv_xtream_codes/" not in fstab_content:
+            with open("/etc/fstab", "a") as rFile:
+                rFile.write("tmpfs /home/xtreamcodes/iptv_xtream_codes/streams tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=90% 0 0\ntmpfs /home/xtreamcodes/iptv_xtream_codes/tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=2G 0 0")
+    except Exception:
+        pass
+    
+    # Check and update /etc/sudoers
     try:
-        extract_archive_safe(tmp_archive, INSTALL_DIR)
-    except Exception as e:
-        log(f"Extraction/install move failed: {e}")
-        # try to cleanup
-        try:
-            tmp_archive.unlink()
-        except Exception:
-            pass
-        sys.exit(1)
-    finally:
-        try:
-            tmp_archive.unlink()
-        except Exception:
-            pass
-
-    # fix ownership and permissions
-    run(f"chown -R {USER}:{USER} {str(INSTALL_DIR)}")
-    for c in INSTALL_DIR.rglob("*.conf"):
-        try:
-            c.chmod(0o640)
-        except Exception:
-            pass
-    for p in INSTALL_DIR.rglob("*.php"):
-        try:
-            p.chmod(0o640)
-        except Exception:
-            pass
-
-    # mysql setup
-    db_name = input("Database name to create (default: xtream_iptvpro): ").strip() or "xtream_iptvpro"
-    db_user = input("Database user to create (default: user_iptvpro): ").strip() or "user_iptvpro"
-    db_password = getpass("Password for new database user (leave empty to generate random): ")
-    if not db_password:
-        db_password = generate_password()
-    log(f"Creating DB: {db_name} user: {db_user} (password length {len(db_password)})")
-
+        with open("/etc/sudoers", "r") as f:
+            sudoers_content = f.read()
+        if "xtreamcodes" not in sudoers_content:
+            os.system('echo "xtreamcodes ALL = (root) NOPASSWD: /sbin/iptables, /usr/bin/chattr" >> /etc/sudoers')
+    except Exception:
+        pass
+    
+    # Create init script
+    if not os.path.exists("/etc/init.d/xtreamcodes"):
+        with open("/etc/init.d/xtreamcodes", "w") as rFile:
+            rFile.write("#! /bin/bash\n/home/xtreamcodes/iptv_xtream_codes/start_services.sh")
+        os.system("chmod +x /etc/init.d/xtreamcodes > /dev/null")
+    
+    # Remove existing ffmpeg link
+    try: 
+        os.remove("/usr/bin/ffmpeg")
+    except: 
+        pass
+    
+    if rType == "MAIN": 
+        # edited these 2 files return api response without main server ip, it is useful if you use a proxy in front of your main server.
+        os.system("mv /home/xtreamcodes/iptv_xtream_codes/wwwdir/panel_api.php /home/xtreamcodes/iptv_xtream_codes/wwwdir/.panel_api_original.php && wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/panel_api.php -O /home/xtreamcodes/iptv_xtream_codes/wwwdir/panel_api.php")
+        os.system("mv /home/xtreamcodes/iptv_xtream_codes/wwwdir/player_api.php /home/xtreamcodes/iptv_xtream_codes/wwwdir/.player_api_original.php && wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/player_api.php -O /home/xtreamcodes/iptv_xtream_codes/wwwdir/player_api.php")
+    
+    # Create tv_archive directory
+    if not os.path.exists("/home/xtreamcodes/iptv_xtream_codes/tv_archive"): 
+        os.makedirs("/home/xtreamcodes/iptv_xtream_codes/tv_archive/", exist_ok=True)
+    
+    # Create symbolic link for ffmpeg
+    os.system("ln -s /home/xtreamcodes/iptv_xtream_codes/bin/ffmpeg /usr/bin/")
+    
+    # Download and setup GeoLite2 database
+    os.system("chattr -i /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb > /dev/null")
+    os.system("wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/GeoLite2.mmdb -O /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb")
+    os.system("wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/pid_monitor.php -O /home/xtreamcodes/iptv_xtream_codes/crons/pid_monitor.php")
+    
+    # Set permissions
+    os.system("chown xtreamcodes:xtreamcodes -R /home/xtreamcodes > /dev/null")
+    os.system("chmod -R 0777 /home/xtreamcodes > /dev/null")
+    os.system("chattr +i /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb > /dev/null")
+    os.system("sed -i 's|chown -R xtreamcodes:xtreamcodes /home/xtreamcodes|chown -R xtreamcodes:xtreamcodes /home/xtreamcodes 2>/dev/null|g' /home/xtreamcodes/iptv_xtream_codes/start_services.sh")
+    os.system("chmod +x /home/xtreamcodes/iptv_xtream_codes/start_services.sh > /dev/null")
+    os.system("mount -a")
+    os.system("chmod 0700 /home/xtreamcodes/iptv_xtream_codes/config > /dev/null")
+    os.system("sed -i 's|echo \"Xtream Codes Reborn\";|header(\"Location: https://www.google.com/\");|g' /home/xtreamcodes/iptv_xtream_codes/wwwdir/index.php")
+    
+    # Update /etc/hosts
     try:
-        configure_mysql_safe(db_name, db_user, db_password)
+        with open("/etc/hosts", "r") as f:
+            hosts_content = f.read()
+        
+        hosts_entries = [
+            ("127.0.0.1    api.xtream-codes.com", "api.xtream-codes.com"),
+            ("127.0.0.1    downloads.xtream-codes.com", "downloads.xtream-codes.com"),
+            ("127.0.0.1    xtream-codes.com", "xtream-codes.com")
+        ]
+        
+        for entry, check in hosts_entries:
+            if check not in hosts_content:
+                os.system(f'echo "{entry}" >> /etc/hosts')
+    except Exception:
+        pass
+    
+    # Update crontab
+    try:
+        with open("/etc/crontab", "r") as f:
+            crontab_content = f.read()
+        if "@reboot root /home/xtreamcodes/iptv_xtream_codes/start_services.sh" not in crontab_content:
+            os.system('echo "@reboot root /home/xtreamcodes/iptv_xtream_codes/start_services.sh" >> /etc/crontab')
+    except Exception:
+        pass
+
+def start(first=True):
+    if first: 
+        printc("Starting Xtream Codes")
+    else: 
+        printc("Restarting Xtream Codes")
+    os.system("/home/xtreamcodes/iptv_xtream_codes/start_services.sh > /dev/null")
+
+def modifyNginx():
+    printc("Modifying Nginx")
+    rPath = "/home/xtreamcodes/iptv_xtream_codes/nginx/conf/nginx.conf"
+    
+    try:
+        with open(rPath, "r") as f:
+            rPrevData = f.read()
+        
+        if "listen 25500;" not in rPrevData:
+            shutil.copy(rPath, "%s.xc" % rPath)
+            rData = "}".join(rPrevData.split("}")[:-1]) + """    server {
+        listen 25500;
+        index index.php index.html index.htm;
+        root /home/xtreamcodes/iptv_xtream_codes/admin/;
+
+        location ~ \\.php$ {
+			limit_req zone=one burst=8;
+            try_files $uri =404;
+			fastcgi_index index.php;
+			fastcgi_pass php;
+			include fastcgi_params;
+			fastcgi_buffering on;
+			fastcgi_buffers 96 32k;
+			fastcgi_buffer_size 32k;
+			fastcgi_max_temp_file_size 0;
+			fastcgi_keep_conn on;
+			fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+			fastcgi_param SCRIPT_NAME $fastcgi_script_name;
+        }
+    }
+}"""
+            with open(rPath, "w") as rFile:
+                rFile.write(rData)
     except Exception as e:
-        log(f"MySQL configuration failed: {e}")
-        log("You can create the DB/user manually and re-run the config step.")
-        # continue — we still write config but warn user
-        if input("Continue and write config file with given DB credentials? (yes/no): ").strip().lower() != "yes":
-            sys.exit(1)
-
-    # write config file
-    write_config_file_safe(INSTALL_DIR, USER, db_name, db_user, db_password)
-
-    # create systemd service if start script present
-    create_systemd_service_if_needed(USER, INSTALL_DIR)
-
-    ip = get_ip()
-    log("Installation finished (check logs at %s)" % LOG_FILE)
-    log(f"Admin UI (if available) likely: http://{ip}:25500")
-    log(f"DB user: {db_user}")
-    log(f"DB password: {db_password}")
-
-    print("\nNext steps:")
-    print(" - Verify the application admin UI and credentials")
-    print(" - Review ownership and permissions of installed files")
-    print(" - Replace any 3rd-party download URLs with company mirrors")
-    print(" - Monitor CPU/RAM during an initial smoke test")
-    print(" - Consider snapshot/backup before going to production")
+        printc(f"Error modifying Nginx config: {str(e)}", col.FAIL)
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        log("User cancelled (KeyboardInterrupt)")
-    except Exception as e:
-        log(f"Fatal error: {e}")
-        raise
+    printc("Xtream UI - Installer Mirror", col.OKGREEN, 2)
+    print("%s │ NOTE: this is a forked mirror of original installer from emre1393/xtream-ui.com %s" % (col.OKGREEN, col.ENDC))
+    print("%s │ Paid Service On Telegram @lofertech & Youtube = LoferTech Official. %s" % (col.OKGREEN, col.ENDC))
+    print("%s │ For more information visit lofertech.com %s" % (col.OKGREEN, col.ENDC))
+    print(" ")
+    rType = input("  Installation Type [MAIN, LB, UPDATE]: ")
+    print(" ")
+    
+    if rType.upper() in ["MAIN", "LB"]:
+        if rType.upper() == "LB":
+            rHost = input("  Main Server IP Address: ")
+            rPassword = input("  MySQL Password: ")
+            try: 
+                rServerID = int(input("  Load Balancer Server ID: "))
+            except: 
+                rServerID = -1
+            print(" ")
+        else:
+            rHost = "127.0.0.1"
+            rPassword = generate()
+            rServerID = 1
+            
+        rUsername = "user_iptvpro"
+        rDatabase = "xtream_iptvpro"
+        rPort = 7999
+        
+        if len(rHost) > 0 and len(rPassword) > 0 and rServerID > -1:
+            printc("Start installation? Y/N", col.WARNING)
+            if input("  ").upper() == "Y":
+                print(" ")
+                try:
+                    rRet = prepare(rType.upper())
+                    if not install(rType.upper()): 
+                        sys.exit(1)
+                    if rType.upper() == "MAIN":
+                        if not mysql(rUsername, rPassword): 
+                            sys.exit(1)
+                    encrypt(rHost, rUsername, rPassword, rDatabase, rServerID, rPort)
+                    configure(rType.upper())
+                    if rType.upper() == "MAIN": 
+                        modifyNginx()
+                        update(rType.upper())
+                    start()
+                    printc("Installation completed!", col.OKGREEN, 2)
+                    if rType.upper() == "MAIN":
+                        printc("Please store your MySQL password!")
+                        printc(rPassword)
+                        printc("Admin UI: http://%s:25500" % getIP())
+                        printc("Admin UI default login is admin/admin")
+                except Exception as e:
+                    printc(f"Installation failed: {str(e)}", col.FAIL)
+                    sys.exit(1)
+            else: 
+                printc("Installation cancelled", col.FAIL)
+        else: 
+            printc("Invalid entries", col.FAIL)
+            
+    elif rType.upper() == "UPDATE":
+        if os.path.exists("/home/xtreamcodes/iptv_xtream_codes/wwwdir/api.php"):
+            printc("Update Admin Panel? Y/N?", col.WARNING)
+            if input("  ").upper() == "Y":
+                try:
+                    if not update(rType.upper()): 
+                        sys.exit(1)
+                    printc("Installation completed!", col.OKGREEN, 2)
+                    start(False)
+                except Exception as e:
+                    printc(f"Update failed: {str(e)}", col.FAIL)
+                    sys.exit(1)
+        else: 
+            printc("Install Xtream Codes Main first!", col.FAIL)
+    else: 
+        printc("Invalid installation type", col.FAIL)

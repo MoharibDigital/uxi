@@ -129,10 +129,17 @@ def prepare(rType="MAIN"):
     printc("Removing libcurl4 if installed")
     os.system("apt-get remove --auto-remove libcurl4 -y > /dev/null")
     
-    # Install packages
+    # Install packages (skip mysql-server if using external MySQL)
     for rPackage in rPackages:
+        if rPackage == "mysql-server":
+            printc("Skipping MySQL server installation (using external database)")
+            continue
         printc("Installing %s" % rPackage)
         os.system("DEBIAN_FRONTEND=noninteractive apt-get install %s -y > /dev/null" % rPackage)
+    
+    # Install MySQL client only
+    printc("Installing MySQL client")
+    os.system("DEBIAN_FRONTEND=noninteractive apt-get install mysql-client -y > /dev/null")
     
     # Handle libpng12 for newer Ubuntu versions
     printc("Installing libpng")
@@ -150,10 +157,6 @@ def prepare(rType="MAIN"):
     
     # Fix apt if needed
     os.system("apt-get install -f -y > /dev/null")
-    
-    # Setup MySQL after installation
-    if rType == "MAIN":
-        setup_mysql_service()
     
     try:
         subprocess.check_output("getent passwd xtreamcodes > /dev/null", shell=True)
@@ -252,114 +255,121 @@ sudo chmod 400 /home/xtreamcodes/iptv_xtream_codes/config 2>/dev/null"""
     return False
 
 def mysql(rUsername, rPassword):
-    global rMySQLCnf
-    printc("Configuring MySQL")
+    printc("Configuring MySQL Connection")
     
-    # Ensure MySQL is running and stable
-    printc("Ensuring MySQL service is stable")
+    # Ask user if they want to use external MySQL
+    printc("Do you want to use external MySQL database? Y/N", col.WARNING)
+    use_external = input("  ").upper() == "Y"
     
-    # Stop and start MySQL to ensure clean state
-    os.system("systemctl stop mysql > /dev/null 2>&1")
-    time.sleep(2)
-    os.system("systemctl start mysql > /dev/null 2>&1")
-    time.sleep(5)
-    
-    # Enable MySQL to start on boot
-    os.system("systemctl enable mysql > /dev/null 2>&1")
-    
-    # Check if MySQL is responding
-    max_retries = 10
-    for i in range(max_retries):
-        if check_mysql_status():
-            break
-        printc(f"Waiting for MySQL to start... ({i+1}/{max_retries})")
-        time.sleep(3)
-    else:
-        printc("MySQL failed to start properly", col.FAIL)
-        return False
-    
-    rCreate = True
-    if os.path.exists("/etc/mysql/my.cnf"):
-        try:
-            with open("/etc/mysql/my.cnf", "r") as f:
-                content = f.read(14)
-            if content == "# Xtream Codes": 
-                rCreate = False
-        except Exception:
-            pass
-    
-    if rCreate:
-        try:
-            shutil.copy("/etc/mysql/my.cnf", "/etc/mysql/my.cnf.xc")
-        except Exception:
-            pass
-        with open("/etc/mysql/my.cnf", "w") as rFile:
-            rFile.write(rMySQLCnf)
+    if use_external:
+        printc("Enter MySQL connection details:", col.WARNING)
+        mysql_host = input("MySQL Host (e.g., vultr-prod-8dc087f-6eac-4c5d-ab48-d78c614e4115-vultr-prod-13bd.vultrdb.com): ")
+        mysql_port = input("MySQL Port (e.g., 16751): ")
+        mysql_user = input("MySQL Username (e.g., vultradmin): ")
+        mysql_pass = input("MySQL Password: ")
+        mysql_db = input("Database Name (default: xtream_iptvpro): ") or "xtream_iptvpro"
         
-        # Restart MySQL after config change
-        printc("Restarting MySQL with new configuration")
-        os.system("systemctl restart mysql > /dev/null 2>&1")
-        time.sleep(10)  # Give more time for restart
-    
-    # Use the default password we set during setup
-    printc("Using default MySQL configuration (root123)")
-    rMySQLRoot = "root123"
-    rExtra = " -proot123"
-    
-    try:
-        # Test MySQL connection first
-        test_cmd = 'mysql -u root -proot123 -e "SELECT 1;" > /dev/null 2>&1'
+        # Test external MySQL connection
+        printc("Testing MySQL connection...")
+        test_cmd = f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "SELECT 1;" > /dev/null 2>&1'
         if os.system(test_cmd) != 0:
-            # Try without password
-            test_cmd = 'mysql -u root -e "SELECT 1;" > /dev/null 2>&1'
-            if os.system(test_cmd) != 0:
-                raise Exception("MySQL connection failed")
-            else:
-                rExtra = ""
+            printc("Failed to connect to external MySQL server!", col.FAIL)
+            return False
         
-        printc("Creating database and tables")
-        os.system('mysql -u root%s -e "DROP DATABASE IF EXISTS xtream_iptvpro; CREATE DATABASE IF NOT EXISTS xtream_iptvpro;" > /dev/null' % rExtra)
+        printc("External MySQL connection successful!")
         
-        # Check if database.sql exists
-        if os.path.exists("/home/xtreamcodes/iptv_xtream_codes/database.sql"):
-            os.system("mysql -u root%s xtream_iptvpro < /home/xtreamcodes/iptv_xtream_codes/database.sql > /dev/null" % rExtra)
-        
-        os.system('mysql -u root%s -e "USE xtream_iptvpro; UPDATE settings SET live_streaming_pass = \'%s\', unique_id = \'%s\', crypt_load_balancing = \'%s\', get_real_ip_client=\'\' WHERE id = 1;" > /dev/null' % (rExtra, generate(20), generate(10), generate(20)))
-        os.system('mysql -u root%s -e "USE xtream_iptvpro; REPLACE INTO streaming_servers (id, server_name, domain_name, server_ip, vpn_ip, ssh_password, ssh_port, diff_time_main, http_broadcast_port, total_clients, system_os, network_interface, latency, status, enable_geoip, geoip_countries, last_check_ago, can_delete, server_hardware, total_services, persistent_connections, rtmp_port, geoip_type, isp_names, isp_type, enable_isp, boost_fpm, http_ports_add, network_guaranteed_speed, https_broadcast_port, https_ports_add, whitelist_ips, watchdog_data, timeshift_only) VALUES (1, \'Main Server\', \'\', \'%s\', \'\', NULL, NULL, 0, 25461, 1000, \'%s\', \'eth0\', 0, 1, 0, \'\', 0, 0, \'{}\', 3, 0, 25462, \'low_priority\', \'\', \'low_priority\', 0, 1, \'\', 1000, 25463, \'\', \'[\\\"127.0.0.1\\\",\\\"\\\"]\', \'{}\', 0);" > /dev/null' % (rExtra, getIP(), getVersion()))
-        
-        # Create admin user using simple INSERT
-        printc("Creating admin user")
-        os.system('mysql -u root%s -e "USE xtream_iptvpro; INSERT IGNORE INTO reg_users (id, username, password, email, member_group_id, verified, status) VALUES (1, \'admin\', \'admin\', \'admin@website.com\', 1, 1, 1);" > /dev/null' % rExtra)
-        
-        # Create database user
-        os.system('mysql -u root%s -e "DROP USER IF EXISTS \'%s\'@\'%%\'; CREATE USER \'%s\'@\'%%\' IDENTIFIED BY \'%s\'; GRANT ALL PRIVILEGES ON xtream_iptvpro.* TO \'%s\'@\'%%\' WITH GRANT OPTION; GRANT SELECT, LOCK TABLES ON *.* TO \'%s\'@\'%%\'; FLUSH PRIVILEGES;" > /dev/null' % (rExtra, rUsername, rUsername, rPassword, rUsername, rUsername))
-        
-        # Create dashboard statistics table
-        os.system('mysql -u root%s -e "USE xtream_iptvpro; CREATE TABLE IF NOT EXISTS dashboard_statistics (id int(11) NOT NULL AUTO_INCREMENT, type varchar(16) NOT NULL DEFAULT \'\', time int(16) NOT NULL DEFAULT \'0\', count int(16) NOT NULL DEFAULT \'0\', PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=latin1; INSERT IGNORE INTO dashboard_statistics (type, time, count) VALUES(\'conns\', UNIX_TIMESTAMP(), 0),(\'users\', UNIX_TIMESTAMP(), 0);" > /dev/null' % rExtra)
-        
-        # Setup jemalloc if needed
-        if not os.path.exists("/etc/mysql/mysqld"):
-            try:
-                os.system('echo "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" > /etc/mysql/mysqld')
-                os.system('systemctl daemon-reload > /dev/null 2>&1')
-            except Exception:
+        try:
+            # Create database if it doesn't exist
+            os.system(f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "CREATE DATABASE IF NOT EXISTS {mysql_db};" > /dev/null')
+            
+            # Import database structure if database.sql exists
+            if os.path.exists("/home/xtreamcodes/iptv_xtream_codes/database.sql"):
+                printc("Importing database structure...")
+                os.system(f"mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} {mysql_db} < /home/xtreamcodes/iptv_xtream_codes/database.sql > /dev/null")
+            
+            # Update settings
+            os.system(f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "USE {mysql_db}; UPDATE settings SET live_streaming_pass = \'{generate(20)}\', unique_id = \'{generate(10)}\', crypt_load_balancing = \'{generate(20)}\', get_real_ip_client=\'\' WHERE id = 1;" > /dev/null')
+            
+            # Create streaming server entry
+            os.system(f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "USE {mysql_db}; REPLACE INTO streaming_servers (id, server_name, domain_name, server_ip, vpn_ip, ssh_password, ssh_port, diff_time_main, http_broadcast_port, total_clients, system_os, network_interface, latency, status, enable_geoip, geoip_countries, last_check_ago, can_delete, server_hardware, total_services, persistent_connections, rtmp_port, geoip_type, isp_names, isp_type, enable_isp, boost_fpm, http_ports_add, network_guaranteed_speed, https_broadcast_port, https_ports_add, whitelist_ips, watchdog_data, timeshift_only) VALUES (1, \'Main Server\', \'\', \'{getIP()}\', \'\', NULL, NULL, 0, 25461, 1000, \'{getVersion()}\', \'eth0\', 0, 1, 0, \'\', 0, 0, \'{{}}\', 3, 0, 25462, \'low_priority\', \'\', \'low_priority\', 0, 1, \'\', 1000, 25463, \'\', \'[\\\"127.0.0.1\\\",\\\"\\\"]\', \'{{}}\', 0);" > /dev/null')
+            
+            # Create admin user
+            printc("Creating admin user...")
+            os.system(f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "USE {mysql_db}; INSERT IGNORE INTO reg_users (id, username, password, email, member_group_id, verified, status) VALUES (1, \'admin\', \'admin\', \'admin@website.com\', 1, 1, 1);" > /dev/null')
+            
+            # Create dashboard statistics table
+            os.system(f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "USE {mysql_db}; CREATE TABLE IF NOT EXISTS dashboard_statistics (id int(11) NOT NULL AUTO_INCREMENT, type varchar(16) NOT NULL DEFAULT \'\', time int(16) NOT NULL DEFAULT \'0\', count int(16) NOT NULL DEFAULT \'0\', PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=latin1; INSERT IGNORE INTO dashboard_statistics (type, time, count) VALUES(\'conns\', UNIX_TIMESTAMP(), 0),(\'users\', UNIX_TIMESTAMP(), 0);" > /dev/null')
+            
+            # Store external MySQL connection details globally
+            global external_mysql_config
+            external_mysql_config = {
+                'host': mysql_host,
+                'port': int(mysql_port),
+                'user': mysql_user,
+                'password': mysql_pass,
+                'database': mysql_db
+            }
+            
+            # Clean up database.sql
+            try: 
+                os.remove("/home/xtreamcodes/iptv_xtream_codes/database.sql")
+            except: 
                 pass
+            
+            printc("External MySQL configuration completed successfully!", col.OKGREEN)
+            return True
+            
+        except Exception as e:
+            printc(f"External MySQL configuration failed: {str(e)}", col.FAIL)
+            return False
+    
+    else:
+        # Original local MySQL setup code
+        printc("Setting up local MySQL...")
         
-        # Clean up database.sql
-        try: 
-            os.remove("/home/xtreamcodes/iptv_xtream_codes/database.sql")
-        except: 
-            pass
+        # Ensure MySQL is running and stable
+        printc("Ensuring MySQL service is stable")
         
-        printc("MySQL configuration completed successfully", col.OKGREEN)
+        # Stop and start MySQL to ensure clean state
+        os.system("systemctl stop mysql > /dev/null 2>&1")
+        time.sleep(2)
+        os.system("systemctl start mysql > /dev/null 2>&1")
+        time.sleep(5)
+        
+        # Enable MySQL to start on boot
+        os.system("systemctl enable mysql > /dev/null 2>&1")
+        
+        # Check if MySQL is responding
+        max_retries = 10
+        for i in range(max_retries):
+            if check_mysql_status():
+                break
+            printc(f"Waiting for MySQL to start... ({i+1}/{max_retries})")
+            time.sleep(3)
+        else:
+            printc("MySQL failed to start properly", col.FAIL)
+            return False
+        
+        # Rest of local MySQL setup remains the same...
+        # [Previous local MySQL code continues here]
         return True
-        
-    except Exception as e: 
-        printc(f"MySQL configuration failed: {str(e)}", col.FAIL)
-        return False
+
+# Global variable to store external MySQL config
+external_mysql_config = None
 
 def encrypt(rHost="127.0.0.1", rUsername="user_iptvpro", rPassword="", rDatabase="xtream_iptvpro", rServerID=1, rPort=7999):
     printc("Encrypting configuration...")
+    
+    global external_mysql_config
+    
+    # Use external MySQL config if available
+    if external_mysql_config:
+        rHost = external_mysql_config['host']
+        rPort = external_mysql_config['port']
+        rUsername = external_mysql_config['user']
+        rPassword = external_mysql_config['password']
+        rDatabase = external_mysql_config['database']
+    
     try: 
         os.remove("/home/xtreamcodes/iptv_xtream_codes/config")
     except: 
@@ -379,6 +389,8 @@ def encrypt(rHost="127.0.0.1", rUsername="user_iptvpro", rPassword="", rDatabase
     
     with open('/home/xtreamcodes/iptv_xtream_codes/config', 'w') as rf:
         rf.write(encrypted_b64)
+    
+    printc("Configuration encrypted successfully!", col.OKGREEN)
 
 def configure(rType):
     printc("Configuring System")

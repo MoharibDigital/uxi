@@ -9,7 +9,7 @@ import base64
 import time
 
 rDownloadURL = {"main": "https://bitbucket.org/emre1393/xtreamui_mirror/downloads/main_xtreamcodes_reborn.tar.gz", "sub": "https://bitbucket.org/emre1393/xtreamui_mirror/downloads/sub_xtreamcodes_reborn.tar.gz"}
-rPackages = ["libcurl4t64", "libxslt1-dev", "libgeoip-dev", "e2fsprogs", "wget", "mcrypt", "nscd", "htop", "zip", "unzip", "mc", "libjemalloc2", "python3-paramiko", "mysql-server"]
+rPackages = ["libcurl3", "libxslt1-dev", "libgeoip-dev", "e2fsprogs", "wget", "mcrypt", "nscd", "htop", "zip", "unzip", "mc", "libjemalloc1", "python-paramiko", "mysql-server"]
 rInstall = {"MAIN": "main", "LB": "sub"}
 rUpdate = {"UPDATE": "update"}
 rMySQLCnf = base64.b64decode("IyBYdHJlYW0gQ29kZXMKCltjbGllbnRdCnBvcnQgICAgICAgICAgICA9IDMzMDYKCltteXNxbGRfc2FmZV0KbmljZSAgICAgICAgICAgID0gMAoKW215c3FsZF0KdXNlciAgICAgICAgICAgID0gbXlzcWwKcG9ydCAgICAgICAgICAgID0gNzk5OQpiYXNlZGlyICAgICAgICAgPSAvdXNyCmRhdGFkaXIgICAgICAgICA9IC92YXIvbGliL215c3FsCnRtcGRpciAgICAgICAgICA9IC90bXAKbGMtbWVzc2FnZXMtZGlyID0gL3Vzci9zaGFyZS9teXNxbApza2lwLWV4dGVybmFsLWxvY2tpbmcKc2tpcC1uYW1lLXJlc29sdmU9MQoKYmluZC1hZGRyZXNzICAgICAgICAgICAgPSAqCmtleV9idWZmZXJfc2l6ZSA9IDEyOE0KCm15aXNhbV9zb3J0X2J1ZmZlcl9zaXplID0gNE0KbWF4X2FsbG93ZWRfcGFja2V0ICAgICAgPSA2NE0KbXlpc2FtLXJlY292ZXItb3B0aW9ucyA9IEJBQ0tVUAptYXhfbGVuZ3RoX2Zvcl9zb3J0X2RhdGEgPSA4MTkyCnF1ZXJ5X2NhY2hlX2xpbWl0ICAgICAgID0gNE0KcXVlcnlfY2FjaGVfc2l6ZSAgICAgICAgPSAyNTZNCgoKZXhwaXJlX2xvZ3NfZGF5cyAgICAgICAgPSAxMAptYXhfYmlubG9nX3NpemUgICAgICAgICA9IDEwME0KCm1heF9leGVjdXRpb25fdGltZSA9IDAKdHJhbnNhY3Rpb25faXNvbGF0aW9uID0gUkVBRC1DT01NSVRURUQKCm1heF9jb25uZWN0aW9ucyAgPSAyMDAwMApiYWNrX2xvZyA9IDQwOTYKb3Blbl9maWxlc19saW1pdCA9IDIwMjQwCmlubm9kYl9vcGVuX2ZpbGVzID0gMjAyNDAKbWF4X2Nvbm5lY3RfZXJyb3JzID0gMzA3Mgp0YWJsZV9vcGVuX2NhY2hlID0gNDA5Ngp0YWJsZV9kZWZpbml0aW9uX2NhY2hlID0gNDA5NgoKCnRtcF90YWJsZV9zaXplID0gMUcKbWF4X2hlYXBfdGFibGVfc2l6ZSA9IDFHCgppbm5vZGJfYnVmZmVyX3Bvb2xfc2l6ZSA9IDEwRwppbm5vZGJfYnVmZmVyX3Bvb2xfaW5zdGFuY2VzID0gMTAKaW5ub2RiX3JlYWRfaW9fdGhyZWFkcyA9IDY0Cmlubm9kYl93cml0ZV9pb190aHJlYWRzID0gNjQKaW5ub2RiX3RocmVhZF9jb25jdXJyZW5jeSA9IDAKaW5ub2RiX2ZsdXNoX2xvZ19hdF90cnhfY29tbWl0ID0gMAppbm5vZGJfZmx1c2hfbWV0aG9kID0gT19ESVJFQ1QKcGVyZm9ybWFuY2Vfc2NoZW1hID0gMAppbm5vZGItZmlsZS1wZXItdGFibGUgPSAxCmlubm9kYl9pb19jYXBhY2l0eT0yMDAwMAppbm5vZGJfdGFibGVfbG9ja3MgPSAwCmlubm9kYl9sb2NrX3dhaXRfdGltZW91dCA9IDEwMAppbm5vZGJfZGVhZGxvY2tfZGV0ZWN0ID0gMAoKCnNxbC1tb2RlPSJOT19FTkdJTkVfU1VCU1RJVFVUSU9OIgoKW215c3FsZHVtcF0KcXVpY2sKcXVvdGUtbmFtZXMKbWF4X2FsbG93ZWRfcGFja2V0ICAgICAgPSAyNE0KY29tcGxldGUtaW5zZXJ0CgpbbXlzcWxdCgpbaXNhbWNoa10Ka2V5X2J1ZmZlcl9zaXplICAgICAgICAgICAgICA9IDE2TQ==").decode('utf-8')
@@ -57,64 +57,6 @@ def printc(rText, rColour=col.OKBLUE, rPadding=0):
     print("%s └──────────────────────────────────────── %s" % (rColour, col.ENDC))
     print(" ")
 
-def check_mysql_status():
-    """Check if MySQL is running and accessible"""
-    try:
-        result = subprocess.run(['systemctl', 'is-active', 'mysql'], 
-                              capture_output=True, text=True)
-        return result.stdout.strip() == 'active'
-    except:
-        try:
-            result = subprocess.run(['service', 'mysql', 'status'], 
-                                  capture_output=True, text=True)
-            return 'running' in result.stdout.lower() or 'active' in result.stdout.lower()
-        except:
-            return False
-
-def setup_mysql_service():
-    """Ensure MySQL is properly installed and running"""
-    printc("Setting up MySQL service")
-    
-    # Stop MySQL first if running
-    os.system("systemctl stop mysql > /dev/null 2>&1")
-    os.system("service mysql stop > /dev/null 2>&1")
-    
-    # Configure MySQL to not restart automatically during installation
-    os.system("systemctl disable mysql > /dev/null 2>&1")
-    
-    # Configure MySQL properly
-    mysql_secure_script = """#!/bin/bash
-mysql_secure_installation <<EOF
-
-y
-root123
-root123
-y
-y
-y
-y
-EOF
-"""
-    
-    # Set up MySQL root password automatically
-    try:
-        # Remove any existing MySQL config that might interfere
-        os.system("rm -f /var/lib/mysql/auto.cnf > /dev/null 2>&1")
-        
-        # Initialize MySQL data directory if needed
-        os.system("mysqld --initialize-insecure --user=mysql > /dev/null 2>&1")
-        
-        # Start MySQL in safe mode
-        os.system("systemctl start mysql > /dev/null 2>&1")
-        time.sleep(3)
-        
-        # Set root password
-        os.system('mysql -u root -e "ALTER USER \'root\'@\'localhost\' IDENTIFIED WITH mysql_native_password BY \'root123\';" > /dev/null 2>&1')
-        os.system('mysql -u root -e "FLUSH PRIVILEGES;" > /dev/null 2>&1')
-        
-    except Exception as e:
-        printc(f"MySQL setup warning: {str(e)}", col.WARNING)
-
 def prepare(rType="MAIN"):
     global rPackages
     if rType != "MAIN": 
@@ -129,20 +71,14 @@ def prepare(rType="MAIN"):
     printc("Removing libcurl4 if installed")
     os.system("apt-get remove --auto-remove libcurl4 -y > /dev/null")
     
-    # Install packages (skip mysql-server if using external MySQL)
+    # Install packages
     for rPackage in rPackages:
-        if rPackage == "mysql-server":
-            printc("Skipping MySQL server installation (using external database)")
-            continue
         printc("Installing %s" % rPackage)
-        os.system("DEBIAN_FRONTEND=noninteractive apt-get install %s -y > /dev/null" % rPackage)
-    
-    # Install MySQL client only
-    printc("Installing MySQL client")
-    os.system("DEBIAN_FRONTEND=noninteractive apt-get install mysql-client -y > /dev/null")
+        os.system("apt-get install %s -y > /dev/null" % rPackage)
     
     # Handle libpng12 for newer Ubuntu versions
     printc("Installing libpng")
+    # Try to create symbolic link for newer versions
     os.system("apt-get install libpng16-16 -y > /dev/null")
     os.system("ln -sf /usr/lib/x86_64-linux-gnu/libpng16.so.16 /usr/lib/x86_64-linux-gnu/libpng12.so.0 2>/dev/null")
     
@@ -255,121 +191,101 @@ sudo chmod 400 /home/xtreamcodes/iptv_xtream_codes/config 2>/dev/null"""
     return False
 
 def mysql(rUsername, rPassword):
-    printc("Configuring MySQL Connection")
+    global rMySQLCnf
+    printc("Configuring MySQL")
     
-    # Ask user if they want to use external MySQL
-    printc("Do you want to use external MySQL database? Y/N", col.WARNING)
-    use_external = input("  ").upper() == "Y"
+    # Start MySQL service first
+    printc("Starting MySQL service")
+    os.system("systemctl start mysql > /dev/null 2>&1")
+    os.system("service mysql start > /dev/null 2>&1")
     
-    if use_external:
-        printc("Enter MySQL connection details:", col.WARNING)
-        mysql_host = input("MySQL Host (e.g., vultr-prod-8dc087f-6eac-4c5d-ab48-d78c614e4115-vultr-prod-13bd.vultrdb.com): ")
-        mysql_port = input("MySQL Port (e.g., 16751): ")
-        mysql_user = input("MySQL Username (e.g., vultradmin): ")
-        mysql_pass = input("MySQL Password: ")
-        mysql_db = input("Database Name (default: xtream_iptvpro): ") or "xtream_iptvpro"
-        
-        # Test external MySQL connection
-        printc("Testing MySQL connection...")
-        test_cmd = f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "SELECT 1;" > /dev/null 2>&1'
-        if os.system(test_cmd) != 0:
-            printc("Failed to connect to external MySQL server!", col.FAIL)
-            return False
-        
-        printc("External MySQL connection successful!")
-        
+    # Wait for MySQL to start
+    time.sleep(5)
+    
+    rCreate = True
+    if os.path.exists("/etc/mysql/my.cnf"):
         try:
-            # Create database if it doesn't exist
-            os.system(f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "CREATE DATABASE IF NOT EXISTS {mysql_db};" > /dev/null')
-            
-            # Import database structure if database.sql exists
-            if os.path.exists("/home/xtreamcodes/iptv_xtream_codes/database.sql"):
-                printc("Importing database structure...")
-                os.system(f"mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} {mysql_db} < /home/xtreamcodes/iptv_xtream_codes/database.sql > /dev/null")
-            
-            # Update settings
-            os.system(f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "USE {mysql_db}; UPDATE settings SET live_streaming_pass = \'{generate(20)}\', unique_id = \'{generate(10)}\', crypt_load_balancing = \'{generate(20)}\', get_real_ip_client=\'\' WHERE id = 1;" > /dev/null')
-            
-            # Create streaming server entry
-            os.system(f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "USE {mysql_db}; REPLACE INTO streaming_servers (id, server_name, domain_name, server_ip, vpn_ip, ssh_password, ssh_port, diff_time_main, http_broadcast_port, total_clients, system_os, network_interface, latency, status, enable_geoip, geoip_countries, last_check_ago, can_delete, server_hardware, total_services, persistent_connections, rtmp_port, geoip_type, isp_names, isp_type, enable_isp, boost_fpm, http_ports_add, network_guaranteed_speed, https_broadcast_port, https_ports_add, whitelist_ips, watchdog_data, timeshift_only) VALUES (1, \'Main Server\', \'\', \'{getIP()}\', \'\', NULL, NULL, 0, 25461, 1000, \'{getVersion()}\', \'eth0\', 0, 1, 0, \'\', 0, 0, \'{{}}\', 3, 0, 25462, \'low_priority\', \'\', \'low_priority\', 0, 1, \'\', 1000, 25463, \'\', \'[\\\"127.0.0.1\\\",\\\"\\\"]\', \'{{}}\', 0);" > /dev/null')
-            
-            # Create admin user
-            printc("Creating admin user...")
-            os.system(f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "USE {mysql_db}; INSERT IGNORE INTO reg_users (id, username, password, email, member_group_id, verified, status) VALUES (1, \'admin\', \'admin\', \'admin@website.com\', 1, 1, 1);" > /dev/null')
-            
-            # Create dashboard statistics table
-            os.system(f'mysql -h {mysql_host} -P {mysql_port} -u {mysql_user} -p{mysql_pass} -e "USE {mysql_db}; CREATE TABLE IF NOT EXISTS dashboard_statistics (id int(11) NOT NULL AUTO_INCREMENT, type varchar(16) NOT NULL DEFAULT \'\', time int(16) NOT NULL DEFAULT \'0\', count int(16) NOT NULL DEFAULT \'0\', PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=latin1; INSERT IGNORE INTO dashboard_statistics (type, time, count) VALUES(\'conns\', UNIX_TIMESTAMP(), 0),(\'users\', UNIX_TIMESTAMP(), 0);" > /dev/null')
-            
-            # Store external MySQL connection details globally
-            global external_mysql_config
-            external_mysql_config = {
-                'host': mysql_host,
-                'port': int(mysql_port),
-                'user': mysql_user,
-                'password': mysql_pass,
-                'database': mysql_db
-            }
-            
-            # Clean up database.sql
+            with open("/etc/mysql/my.cnf", "r") as f:
+                content = f.read(14)
+            if content == "# Xtream Codes": 
+                rCreate = False
+        except Exception:
+            pass
+    if rCreate:
+        try:
+            shutil.copy("/etc/mysql/my.cnf", "/etc/mysql/my.cnf.xc")
+        except Exception:
+            pass
+        with open("/etc/mysql/my.cnf", "w") as rFile:
+            rFile.write(rMySQLCnf)
+        os.system("systemctl restart mysql > /dev/null 2>&1")
+        os.system("service mysql restart > /dev/null 2>&1")
+        time.sleep(5)
+    
+    printc("Enter MySQL Root Password:", col.WARNING)
+    for i in range(5):
+        rMySQLRoot = input("  ")
+        print(" ")
+        if len(rMySQLRoot) > 0: 
+            rExtra = " -p%s" % rMySQLRoot
+        else: 
+            rExtra = ""
+        printc("Drop existing & create database? Y/N", col.WARNING)
+        if input("  ").upper() == "Y": 
+            rDrop = True
+        else: 
+            rDrop = False
+        try:
+            # Test MySQL connection first
+            test_cmd = f'mysql -u root{rExtra} -e "SELECT 1;" > /dev/null 2>&1'
+            if os.system(test_cmd) != 0:
+                raise Exception("MySQL connection failed")
+                
+            if rDrop:
+                os.system('mysql -u root%s -e "DROP DATABASE IF EXISTS xtream_iptvpro; CREATE DATABASE IF NOT EXISTS xtream_iptvpro;" > /dev/null' % rExtra)
+                os.system("mysql -u root%s xtream_iptvpro < /home/xtreamcodes/iptv_xtream_codes/database.sql > /dev/null" % rExtra)
+                os.system('mysql -u root%s -e "USE xtream_iptvpro; UPDATE settings SET live_streaming_pass = \'%s\', unique_id = \'%s\', crypt_load_balancing = \'%s\', get_real_ip_client=\'\';" > /dev/null' % (rExtra, generate(20), generate(10), generate(20)))
+                os.system('mysql -u root%s -e "USE xtream_iptvpro; REPLACE INTO streaming_servers (id, server_name, domain_name, server_ip, vpn_ip, ssh_password, ssh_port, diff_time_main, http_broadcast_port, total_clients, system_os, network_interface, latency, status, enable_geoip, geoip_countries, last_check_ago, can_delete, server_hardware, total_services, persistent_connections, rtmp_port, geoip_type, isp_names, isp_type, enable_isp, boost_fpm, http_ports_add, network_guaranteed_speed, https_broadcast_port, https_ports_add, whitelist_ips, watchdog_data, timeshift_only) VALUES (1, \'Main Server\', \'\', \'%s\', \'\', NULL, NULL, 0, 25461, 1000, \'%s\', \'eth0\', 0, 1, 0, \'\', 0, 0, \'{}\', 3, 0, 25462, \'low_priority\', \'\', \'low_priority\', 0, 1, \'\', 1000, 25463, \'\', \'[\"127.0.0.1\",\"\"]\', \'{}\', 0);" > /dev/null' % (rExtra, getIP(), getVersion()))
+                
+                # Create admin user with proper escaping - using subprocess instead of os.system
+                admin_cmd = [
+                    "mysql", "-u", "root", "-p" + rMySQLRoot if rMySQLRoot else "", "-e",
+                    "USE xtream_iptvpro; REPLACE INTO reg_users (id, username, password, email, member_group_id, verified, status) VALUES (1, 'admin', '$6$rounds=20000$xtreamcodes$XThC5OwfuS0YwS4ahiifzF14vkGbGsFF1w7ETL4sRRC5sOrAWCjWvQJDromZUQoQuwbAXAFdX3h3Cp3vqulpS0', 'admin@website.com', 1, 1, 1);"
+                ]
+                if not rMySQLRoot:
+                    admin_cmd.remove("-p")
+                
+                try:
+                    subprocess.run(admin_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                except:
+                    # Fallback to simple method if subprocess fails
+                    os.system('mysql -u root%s -e "USE xtream_iptvpro; INSERT INTO reg_users (id, username, password, email, member_group_id, verified, status) VALUES (1, \'admin\', \'admin\', \'admin@website.com\', 1, 1, 1) ON DUPLICATE KEY UPDATE username=\'admin\';" > /dev/null' % rExtra)
+                
+                os.system('mysql -u root%s -e "CREATE USER \'%s\'@\'%%\' IDENTIFIED BY \'%s\'; GRANT ALL PRIVILEGES ON xtream_iptvpro.* TO \'%s\'@\'%%\' WITH GRANT OPTION; GRANT SELECT, LOCK TABLES ON *.* TO \'%s\'@\'%%\';FLUSH PRIVILEGES;" > /dev/null' % (rExtra, rUsername, rPassword, rUsername, rUsername))
+                os.system('mysql -u root%s -e "USE xtream_iptvpro; CREATE TABLE IF NOT EXISTS dashboard_statistics (id int(11) NOT NULL AUTO_INCREMENT, type varchar(16) NOT NULL DEFAULT \'\', time int(16) NOT NULL DEFAULT \'0\', count int(16) NOT NULL DEFAULT \'0\', PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=latin1; INSERT INTO dashboard_statistics (type, time, count) VALUES(\'conns\', UNIX_TIMESTAMP(), 0),(\'users\', UNIX_TIMESTAMP(), 0);" > /dev/null' % rExtra)
+                
+                if not os.path.exists("/etc/mysql/mysqld"):
+                    try:
+                        with open("/lib/systemd/system/mysql.service", "r") as f:
+                            service_content = f.read()
+                        if "EnvironmentFile=-/etc/mysql/mysqld" not in service_content:
+                            os.system('echo "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.1" > /etc/mysql/mysqld')
+                            with open("/lib/systemd/system/mysql.service", "w") as f:
+                                f.write(rMySQLServiceFile)
+                            os.system('systemctl daemon-reload; systemctl restart mysql.service;')
+                    except Exception:
+                        pass
             try: 
                 os.remove("/home/xtreamcodes/iptv_xtream_codes/database.sql")
             except: 
                 pass
-            
-            printc("External MySQL configuration completed successfully!", col.OKGREEN)
             return True
-            
-        except Exception as e:
-            printc(f"External MySQL configuration failed: {str(e)}", col.FAIL)
-            return False
-    
-    else:
-        # Original local MySQL setup code
-        printc("Setting up local MySQL...")
-        
-        # Ensure MySQL is running and stable
-        printc("Ensuring MySQL service is stable")
-        
-        # Stop and start MySQL to ensure clean state
-        os.system("systemctl stop mysql > /dev/null 2>&1")
-        time.sleep(2)
-        os.system("systemctl start mysql > /dev/null 2>&1")
-        time.sleep(5)
-        
-        # Enable MySQL to start on boot
-        os.system("systemctl enable mysql > /dev/null 2>&1")
-        
-        # Check if MySQL is responding
-        max_retries = 10
-        for i in range(max_retries):
-            if check_mysql_status():
-                break
-            printc(f"Waiting for MySQL to start... ({i+1}/{max_retries})")
-            time.sleep(3)
-        else:
-            printc("MySQL failed to start properly", col.FAIL)
-            return False
-        
-        # Rest of local MySQL setup remains the same...
-        # [Previous local MySQL code continues here]
-        return True
-
-# Global variable to store external MySQL config
-external_mysql_config = None
+        except Exception: 
+            printc("Invalid password or MySQL connection failed! Try again", col.FAIL)
+    return False
 
 def encrypt(rHost="127.0.0.1", rUsername="user_iptvpro", rPassword="", rDatabase="xtream_iptvpro", rServerID=1, rPort=7999):
-    printc("Encrypting configuration...")
-    
-    global external_mysql_config
-    
-    # Use external MySQL config if available
-    if external_mysql_config:
-        rHost = external_mysql_config['host']
-        rPort = external_mysql_config['port']
-        rUsername = external_mysql_config['user']
-        rPassword = external_mysql_config['password']
-        rDatabase = external_mysql_config['database']
-    
+    printc("Encrypting...")
     try: 
         os.remove("/home/xtreamcodes/iptv_xtream_codes/config")
     except: 
@@ -389,8 +305,6 @@ def encrypt(rHost="127.0.0.1", rUsername="user_iptvpro", rPassword="", rDatabase
     
     with open('/home/xtreamcodes/iptv_xtream_codes/config', 'w') as rf:
         rf.write(encrypted_b64)
-    
-    printc("Configuration encrypted successfully!", col.OKGREEN)
 
 def configure(rType):
     printc("Configuring System")
@@ -401,7 +315,7 @@ def configure(rType):
             fstab_content = f.read()
         if "/home/xtreamcodes/iptv_xtream_codes/" not in fstab_content:
             with open("/etc/fstab", "a") as rFile:
-                rFile.write("\ntmpfs /home/xtreamcodes/iptv_xtream_codes/streams tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=90% 0 0\ntmpfs /home/xtreamcodes/iptv_xtream_codes/tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=2G 0 0\n")
+                rFile.write("tmpfs /home/xtreamcodes/iptv_xtream_codes/streams tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=90% 0 0\ntmpfs /home/xtreamcodes/iptv_xtream_codes/tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=2G 0 0")
     except Exception:
         pass
     
@@ -417,7 +331,7 @@ def configure(rType):
     # Create init script
     if not os.path.exists("/etc/init.d/xtreamcodes"):
         with open("/etc/init.d/xtreamcodes", "w") as rFile:
-            rFile.write("#!/bin/bash\n/home/xtreamcodes/iptv_xtream_codes/start_services.sh\n")
+            rFile.write("#! /bin/bash\n/home/xtreamcodes/iptv_xtream_codes/start_services.sh")
         os.system("chmod +x /etc/init.d/xtreamcodes > /dev/null")
     
     # Remove existing ffmpeg link
@@ -427,41 +341,31 @@ def configure(rType):
         pass
     
     if rType == "MAIN": 
-        # Download modified API files
-        os.system("mv /home/xtreamcodes/iptv_xtream_codes/wwwdir/panel_api.php /home/xtreamcodes/iptv_xtream_codes/wwwdir/.panel_api_original.php 2>/dev/null")
-        os.system("wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/panel_api.php -O /home/xtreamcodes/iptv_xtream_codes/wwwdir/panel_api.php")
-        os.system("mv /home/xtreamcodes/iptv_xtream_codes/wwwdir/player_api.php /home/xtreamcodes/iptv_xtream_codes/wwwdir/.player_api_original.php 2>/dev/null")
-        os.system("wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/player_api.php -O /home/xtreamcodes/iptv_xtream_codes/wwwdir/player_api.php")
+        # edited these 2 files return api response without main server ip, it is useful if you use a proxy in front of your main server.
+        os.system("mv /home/xtreamcodes/iptv_xtream_codes/wwwdir/panel_api.php /home/xtreamcodes/iptv_xtream_codes/wwwdir/.panel_api_original.php && wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/panel_api.php -O /home/xtreamcodes/iptv_xtream_codes/wwwdir/panel_api.php")
+        os.system("mv /home/xtreamcodes/iptv_xtream_codes/wwwdir/player_api.php /home/xtreamcodes/iptv_xtream_codes/wwwdir/.player_api_original.php && wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/player_api.php -O /home/xtreamcodes/iptv_xtream_codes/wwwdir/player_api.php")
     
     # Create tv_archive directory
     if not os.path.exists("/home/xtreamcodes/iptv_xtream_codes/tv_archive"): 
         os.makedirs("/home/xtreamcodes/iptv_xtream_codes/tv_archive/", exist_ok=True)
     
     # Create symbolic link for ffmpeg
-    os.system("ln -sf /home/xtreamcodes/iptv_xtream_codes/bin/ffmpeg /usr/bin/ffmpeg")
+    os.system("ln -s /home/xtreamcodes/iptv_xtream_codes/bin/ffmpeg /usr/bin/")
     
     # Download and setup GeoLite2 database
-    os.system("chattr -i /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb > /dev/null 2>&1")
+    os.system("chattr -i /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb > /dev/null")
     os.system("wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/GeoLite2.mmdb -O /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb")
     os.system("wget -q https://bitbucket.org/emre1393/xtreamui_mirror/downloads/pid_monitor.php -O /home/xtreamcodes/iptv_xtream_codes/crons/pid_monitor.php")
     
     # Set permissions
     os.system("chown xtreamcodes:xtreamcodes -R /home/xtreamcodes > /dev/null")
     os.system("chmod -R 0777 /home/xtreamcodes > /dev/null")
-    os.system("chattr +i /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb > /dev/null 2>&1")
-    
-    # Fix start_services.sh permissions
-    if os.path.exists("/home/xtreamcodes/iptv_xtream_codes/start_services.sh"):
-        os.system("sed -i 's|chown -R xtreamcodes:xtreamcodes /home/xtreamcodes|chown -R xtreamcodes:xtreamcodes /home/xtreamcodes 2>/dev/null|g' /home/xtreamcodes/iptv_xtream_codes/start_services.sh")
-        os.system("chmod +x /home/xtreamcodes/iptv_xtream_codes/start_services.sh > /dev/null")
-    
-    # Mount tmpfs
-    os.system("mount -a > /dev/null 2>&1")
-    os.system("chmod 0700 /home/xtreamcodes/iptv_xtream_codes/config > /dev/null 2>&1")
-    
-    # Redirect index.php
-    if os.path.exists("/home/xtreamcodes/iptv_xtream_codes/wwwdir/index.php"):
-        os.system("sed -i 's|echo \"Xtream Codes Reborn\";|header(\"Location: https://www.google.com/\");|g' /home/xtreamcodes/iptv_xtream_codes/wwwdir/index.php")
+    os.system("chattr +i /home/xtreamcodes/iptv_xtream_codes/GeoLite2.mmdb > /dev/null")
+    os.system("sed -i 's|chown -R xtreamcodes:xtreamcodes /home/xtreamcodes|chown -R xtreamcodes:xtreamcodes /home/xtreamcodes 2>/dev/null|g' /home/xtreamcodes/iptv_xtream_codes/start_services.sh")
+    os.system("chmod +x /home/xtreamcodes/iptv_xtream_codes/start_services.sh > /dev/null")
+    os.system("mount -a")
+    os.system("chmod 0700 /home/xtreamcodes/iptv_xtream_codes/config > /dev/null")
+    os.system("sed -i 's|echo \"Xtream Codes Reborn\";|header(\"Location: https://www.google.com/\");|g' /home/xtreamcodes/iptv_xtream_codes/wwwdir/index.php")
     
     # Update /etc/hosts
     try:
@@ -494,18 +398,7 @@ def start(first=True):
         printc("Starting Xtream Codes")
     else: 
         printc("Restarting Xtream Codes")
-    
-    # Ensure MySQL is still running
-    if not check_mysql_status():
-        printc("Restarting MySQL service")
-        os.system("systemctl start mysql > /dev/null 2>&1")
-        time.sleep(3)
-    
-    # Start Xtream Codes services
-    if os.path.exists("/home/xtreamcodes/iptv_xtream_codes/start_services.sh"):
-        os.system("/home/xtreamcodes/iptv_xtream_codes/start_services.sh > /dev/null")
-    else:
-        printc("Warning: start_services.sh not found", col.WARNING)
+    os.system("/home/xtreamcodes/iptv_xtream_codes/start_services.sh > /dev/null")
 
 def modifyNginx():
     printc("Modifying Nginx")
@@ -578,11 +471,9 @@ if __name__ == "__main__":
                 try:
                     rRet = prepare(rType.upper())
                     if not install(rType.upper()): 
-                        printc("Installation failed at software installation step", col.FAIL)
                         sys.exit(1)
                     if rType.upper() == "MAIN":
                         if not mysql(rUsername, rPassword): 
-                            printc("Installation failed at MySQL configuration step", col.FAIL)
                             sys.exit(1)
                     encrypt(rHost, rUsername, rPassword, rDatabase, rServerID, rPort)
                     configure(rType.upper())
@@ -590,35 +481,33 @@ if __name__ == "__main__":
                         modifyNginx()
                         update(rType.upper())
                     start()
-                    printc("Installation completed successfully!", col.OKGREEN, 2)
+                    printc("Installation completed!", col.OKGREEN, 2)
                     if rType.upper() == "MAIN":
-                        printc("Important: Store your MySQL password safely!")
-                        printc(f"MySQL Password: {rPassword}")
-                        printc(f"Admin UI: http://{getIP()}:25500")
-                        printc("Default Admin Login: admin/admin")
-                        printc("MySQL Root Password: root123")
+                        printc("Please store your MySQL password!")
+                        printc(rPassword)
+                        printc("Admin UI: http://%s:25500" % getIP())
+                        printc("Admin UI default login is admin/admin")
                 except Exception as e:
                     printc(f"Installation failed: {str(e)}", col.FAIL)
                     sys.exit(1)
             else: 
                 printc("Installation cancelled", col.FAIL)
         else: 
-            printc("Invalid entries provided", col.FAIL)
+            printc("Invalid entries", col.FAIL)
             
     elif rType.upper() == "UPDATE":
         if os.path.exists("/home/xtreamcodes/iptv_xtream_codes/wwwdir/api.php"):
-            printc("Update Admin Panel? Y/N", col.WARNING)
+            printc("Update Admin Panel? Y/N?", col.WARNING)
             if input("  ").upper() == "Y":
                 try:
                     if not update(rType.upper()): 
-                        printc("Update failed", col.FAIL)
                         sys.exit(1)
-                    printc("Update completed successfully!", col.OKGREEN, 2)
+                    printc("Installation completed!", col.OKGREEN, 2)
                     start(False)
                 except Exception as e:
                     printc(f"Update failed: {str(e)}", col.FAIL)
                     sys.exit(1)
         else: 
-            printc("Please install Xtream Codes Main server first!", col.FAIL)
+            printc("Install Xtream Codes Main first!", col.FAIL)
     else: 
-        printc("Invalid installation type. Please choose MAIN, LB, or UPDATE", col.FAIL)
+        printc("Invalid installation type", col.FAIL)
